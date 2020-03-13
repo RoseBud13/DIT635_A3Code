@@ -29,7 +29,7 @@ VAR
   ButtonN_WtoE: boolean;
   ButtonN_EtoW: boolean;
   ButtonS_WtoE: boolean;
-  ButtonS_EtoE: boolean;
+  ButtonS_EtoW: boolean;
   ButtonW_NtoS: boolean;
   ButtonW_StoN: boolean;
   ButtonE_NtoS: boolean;
@@ -81,11 +81,11 @@ ASSIGN
       (TrafLight_NS = GREEN) & (time_left_green = 0): YELLOW;
       TRUE: TrafLight_NS;
   esac;
-  next(TrafLight_NS) := case
-      (TrafLight_NS = RED) & (Curr_Direction = NS) & (time_left_red = 0): GREEN;
-      (TrafLight_NS = YELLOW) & (Curr_Direction = WE) & (time_left_yellow = 0): RED;
-      (TrafLight_NS = GREEN) & (time_left_green = 0): YELLOW;
-      TRUE: TrafLight_NS;
+  next(TrafLight_WE) := case
+      (TrafLight_WE = RED) & (Curr_Direction = NS) & (time_left_red = 0): GREEN;
+      (TrafLight_WE = YELLOW) & (Curr_Direction = WE) & (time_left_yellow = 0): RED;
+      (TrafLight_WE = GREEN) & (time_left_green = 0): YELLOW;
+      TRUE: TrafLight_WE;
   esac;
   next(PedLight_NS) := case
       (PedLight_NS = WAIT) & (Curr_Direction = WE) & (time_left_red = 0): WALK;
@@ -100,23 +100,34 @@ ASSIGN
       TRUE: PedLight_WE;
   esac;
   next(Curr_Direction) := case
-      (Curr_Direction = NS) & (time_left_red = 0) & (SensorNS_Emergency == TRUE): NS;
-      (Curr_Direction = WE) & (time_left_red = 0) & (SensorWE_Emergency == TRUE): WE;
+      (Curr_Direction = NS) & (time_left_red = 0) & (SensorNS_Emergency = TRUE): NS;
+      (Curr_Direction = WE) & (time_left_red = 0) & (SensorWE_Emergency = TRUE): WE;
       (Curr_Direction = NS) & (time_left_red = 0): WE;
       (Curr_Direction = WE) & (time_left_red = 0): NS;
       TRUE: Curr_Direction;
   esac;
   next(time_left_green) := case
-      (SensorNS_Emergency == TRUE) & (Curr_Direction = WE) & (SensorWE_Emergency == FALSE) & (time_left_green > 0): 0;
-      (SensorWE_Emergency == TRUE) & (Curr_Direction = NS) & (SensorNS_Emergency == FALSE) & (time_left_green > 0): 0;
-      (SensorNS_Emergency == TRUE) & (Curr_Direction = NS) & (time_left_green > 0): time_left_green + 1;
-      (SensorWE_Emergency == TRUE) & (Curr_Direction = WE) & (time_left_green > 0): time_left_green + 1;
+      (SensorNS_Emergency = TRUE) & (Curr_Direction = WE) & (SensorWE_Emergency = FALSE) & (time_left_green > 0): 0;
+      (SensorWE_Emergency = TRUE) & (Curr_Direction = NS) & (SensorNS_Emergency = FALSE) & (time_left_green > 0): 0;
+      (SensorNS_Emergency = TRUE) & (Curr_Direction = NS) & (time_left_green = 1): 1;
+      (SensorWE_Emergency = TRUE) & (Curr_Direction = WE) & (time_left_green = 1): 1;
       (time_left_green > 0): case
-          (Curr_Direction = NS) & (waiting_cars_reduction = applying) & (SensorWE_car > 3) & (walkButton_reduction = applying): time_left_green - time_left_green*0.5 - 1;
-          (Curr_Direction = WE) & (waiting_cars_reduction = applying) & (SensorNS_car > 3) & (walkButton_reduction = applying): time_left_green - time_left_green*0.5 - 1;
-          (walkButton_reduction = applying) & (((waiting_cars_reduction = applying) & (SensorNS_car | SensorWE_car < 3)) || (waiting_cars_reduction = no)): time_left_green - time_left_green*0.6 - 1;
-          (walkButton_reduction = no) & (waiting_cars_reduction = applying) & (SensorNS_car | SensorWE_car > 3): time_left_green - time_left_green*0.6 - 1;
-          (walkButton_reduction = no) & (waiting_cars_reduction = applying) & (SensorNS_car | SensorWE_car < 3): time_left_green - 1;
+          (Curr_Direction = NS) & (waiting_cars_reduction = applying) & (SensorWE_cars > 3) & (walkButton_reduction = applying): case
+              (time_left_green - (time_left_green*50/100) - 1 >= 0): time_left_green - (time_left_green*50/100) - 1;
+              TRUE: 0;
+          esac;
+          (Curr_Direction = WE) & (waiting_cars_reduction = applying) & (SensorNS_cars > 3) & (walkButton_reduction = applying): case
+              (time_left_green - (time_left_green*50/100) - 1 >= 0): time_left_green - (time_left_green*50/100) - 1;
+              TRUE: 0;
+          esac;
+          (walkButton_reduction = applying) & (((waiting_cars_reduction = applying) & (SensorNS_cars < 3 | SensorWE_cars < 3)) | (waiting_cars_reduction = no)): case
+              (time_left_green - (time_left_green*60/100) - 1 >= 0): time_left_green - (time_left_green*60/100) - 1;
+              TRUE: 0;
+          esac;
+          (walkButton_reduction = no) & (waiting_cars_reduction = applying) & (SensorNS_cars > 3 | SensorWE_cars > 3): case
+              (time_left_green - (time_left_green*60/100) - 1 >= 0): time_left_green - (time_left_green*60/100) - 1;
+              TRUE: 0;
+          esac;
           TRUE: time_left_green - 1;
       esac;
       (time_left_red = 0): 45;
@@ -198,3 +209,4 @@ ASSIGN
   esac;
   next(SensorNS_Emergency) := {FALSE, TRUE};
   next(SensorWE_Emergency) := {FALSE, TRUE};
+
