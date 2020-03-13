@@ -1,0 +1,200 @@
+MODULE main
+VAR
+  -- TrafLight_NS indicating the two traffic lights at north/south direction
+  -- TLight_WnE indicating the two traffic lights at west/east direction
+  -- PedLight_NS and PedLight_WE are the lights for pedestrians
+  TrafLight_NS: {RED, YELLOW, GREEN};
+  TrafLight_WE: {RED, YELLOW, GREEN};
+  PedLight_NS: {WAIT, FLASH, WALK};
+  PedLight_WE: {WAIT, FLASH, WALK};
+
+
+  -- Curr_Direction is the current direction that the traffic lights are green
+  -- NS is to north or to south direction
+  -- WE is to west or to east direction
+  Curr_Direction: {NS, WE};
+
+  -- time of every lights' states is the core of this system
+  -- time left green for currently green light (seconds)
+  -- time left yellow for currently yellow light
+  -- time left yellow for currently red light
+  -- walkButton_reduction is the method to shorten the time of the green lights at the other direction for pedestrians
+  time_left_green: 0..45;
+  time_left_yellow: 0..5;
+  time_left_red: 0..45;
+  walkButton_reduction: {no, applying};
+
+  -- 8 crosswalks buttons, corresponding to 4 directions
+  -- every button has two states: pressed(1) or unpressed(0)
+  ButtonN_WtoE: boolean;
+  ButtonN_EtoW: boolean;
+  ButtonS_WtoE: boolean;
+  ButtonS_EtoE: boolean;
+  ButtonW_NtoS: boolean;
+  ButtonW_StoN: boolean;
+  ButtonE_NtoS: boolean;
+  ButtonE_StoN: boolean;
+
+  --when red and yellow, cars will arrive at either side of intersection
+  --the sensor will detect the amount of waiting cars on either side
+  --SensorNS_cars is the amount of waiting cars traveling north and south directions
+  --SensorWE_cars is the amount of waiting cars traveling west and east directions
+  -- waiting_cars_reduction is the method to shorten the time of the green lights at the other direction for cars
+  SensorNS_cars: 0..20;
+  SensorWE_cars: 0..20;
+  waiting_cars_reduction: {no, applying};
+
+  -- SensorNS_Emergency is the sensor to detect emergency vehicle coming from NS directions
+  -- SensorNS_Emergency is the sensor to detect emergency vehicle coming from WE directions
+  -- the states of emergency sensor are either triggered(1) or idle(0)
+  SensorNS_Emergency: boolean;
+  SensorWE_Emergency: boolean;
+
+
+ASSIGN
+  init(TrafLight_NS) := GREEN;
+  init(TrafLight_WE) := RED;
+  init(PedLight_NS) := WALK;
+  init(PedLight_WE) := WAIT;
+  init(Curr_Direction) := NS;
+  init(time_left_green) := 45;
+  init(time_left_yellow) := 5;
+  init(time_left_red) := 45;
+  init(walkButton_reduction) := no;
+  init(ButtonN_WtoE) := FALSE;
+  init(ButtonN_EtoW) := FALSE;
+  init(ButtonS_WtoE) := FALSE;
+  init(ButtonS_EtoW) := FALSE;
+  init(ButtonW_NtoS) := FALSE;
+  init(ButtonW_StoN) := FALSE;
+  init(ButtonE_NtoS) := FALSE;
+  init(ButtonE_StoN) := FALSE;
+  init(SensorNS_cars) := 0;
+  init(SensorWE_cars) := 0;
+  init(waiting_cars_reduction) := no;
+  init(SensorNS_Emergency) := FALSE;
+  init(SensorWE_Emergency) := FALSE;
+
+  next(TrafLight_NS) := case
+      (TrafLight_NS = RED) & (Curr_Direction = WE) & (time_left_red = 0): GREEN;
+      (TrafLight_NS = YELLOW) & (Curr_Direction = NS) & (time_left_yellow = 0): RED;
+      (TrafLight_NS = GREEN) & (time_left_green = 0): YELLOW;
+      TRUE: TrafLight_NS;
+  esac;
+  next(TrafLight_NS) := case
+      (TrafLight_NS = RED) & (Curr_Direction = NS) & (time_left_red = 0): GREEN;
+      (TrafLight_NS = YELLOW) & (Curr_Direction = WE) & (time_left_yellow = 0): RED;
+      (TrafLight_NS = GREEN) & (time_left_green = 0): YELLOW;
+      TRUE: TrafLight_NS;
+  esac;
+  next(PedLight_NS) := case
+      (PedLight_NS = WAIT) & (Curr_Direction = WE) & (time_left_red = 0): WALK;
+      (PedLight_NS = FLASH) & (Curr_Direction = NS) & (time_left_yellow = 0): WAIT;
+      (PedLight_NS = WALK) & (time_left_green = 0): FLASH;
+      TRUE: PedLight_NS;
+  esac;
+  next(PedLight_WE) := case
+      (PedLight_WE = WAIT) & (Curr_Direction = NS) & (time_left_red = 0): WALK;
+      (PedLight_WE = FLASH) & (Curr_Direction = WE) & (time_left_yellow = 0): WAIT;
+      (PedLight_WE = WALK) & (time_left_green = 0): FLASH;
+      TRUE: PedLight_WE;
+  esac;
+  next(Curr_Direction) := case
+      (Curr_Direction = NS) & (time_left_red = 0) & (SensorNS_Emergency == TRUE): NS;
+      (Curr_Direction = WE) & (time_left_red = 0) & (SensorWE_Emergency == TRUE): WE;
+      (Curr_Direction = NS) & (time_left_red = 0): WE;
+      (Curr_Direction = WE) & (time_left_red = 0): NS;
+      TRUE: Curr_Direction;
+  esac;
+  next(time_left_green) := case
+      (SensorNS_Emergency == TRUE) & (Curr_Direction = WE) & (SensorWE_Emergency == FALSE) & (time_left_green > 0): 0;
+      (SensorWE_Emergency == TRUE) & (Curr_Direction = NS) & (SensorNS_Emergency == FALSE) & (time_left_green > 0): 0;
+      (SensorNS_Emergency == TRUE) & (Curr_Direction = NS) & (time_left_green > 0): time_left_green + 1;
+      (SensorWE_Emergency == TRUE) & (Curr_Direction = WE) & (time_left_green > 0): time_left_green + 1;
+      (time_left_green > 0): case
+          (Curr_Direction = NS) & (waiting_cars_reduction = applying) & (SensorWE_car > 3) & (walkButton_reduction = applying): time_left_green - time_left_green*0.5 - 1;
+          (Curr_Direction = WE) & (waiting_cars_reduction = applying) & (SensorNS_car > 3) & (walkButton_reduction = applying): time_left_green - time_left_green*0.5 - 1;
+          (walkButton_reduction = applying) & (((waiting_cars_reduction = applying) & (SensorNS_car | SensorWE_car < 3)) || (waiting_cars_reduction = no)): time_left_green - time_left_green*0.6 - 1;
+          (walkButton_reduction = no) & (waiting_cars_reduction = applying) & (SensorNS_car | SensorWE_car > 3): time_left_green - time_left_green*0.6 - 1;
+          (walkButton_reduction = no) & (waiting_cars_reduction = applying) & (SensorNS_car | SensorWE_car < 3): time_left_green - 1;
+          TRUE: time_left_green - 1;
+      esac;
+      (time_left_red = 0): 45;
+      TRUE: time_left_green;
+  esac;
+  next(time_left_yellow) := case
+      (time_left_yellow > 0) & (time_left_green = 0): time_left_yellow - 1;
+      (time_left_red = 0): 5;
+      TRUE: time_left_yellow;
+  esac;
+  next(time_left_red) := case
+      (time_left_red > 0) & (time_left_yellow = 0): time_left_red - 1;
+      (time_left_red = 0): 45;
+      TRUE: time_left_red;
+  esac;
+  next(walkButton_reduction) := case
+      (Curr_Direction = NS) & ((ButtonN_WtoE) | (ButtonN_EtoW) | (ButtonS_WtoE) | (ButtonS_EtoW)) & (walkButton_reduction = no): applying;
+      (Curr_Direction = WE) & ((ButtonW_NtoS) | (ButtonW_StoN) | (ButtonE_NtoS) | (ButtonE_StoN)) & (walkButton_reduction = no): applying;
+      (walkButton_reduction = applying): no;
+      TRUE: walkButton_reduction;
+  esac;
+  next(ButtonN_WtoE) := case
+      (!ButtonN_WtoE | !ButtonN_EtoW) & (!ButtonS_WtoE | !ButtonS_EtoW) & (Curr_Direction = NS) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonN_WtoE;
+  esac;
+  next(ButtonN_EtoW) := case
+      (!ButtonN_WtoE | !ButtonN_EtoW) & (!ButtonS_WtoE | !ButtonS_EtoW) & (Curr_Direction = NS) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonN_EtoW;
+  esac;
+  next(ButtonS_WtoE) := case
+      (!ButtonS_WtoE | !ButtonS_EtoW) & (!ButtonN_WtoE | !ButtonN_EtoW) & (Curr_Direction = NS) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonS_WtoE;
+  esac;
+  next(ButtonS_EtoW) := case
+      (!ButtonS_WtoE | !ButtonS_EtoW) & (!ButtonN_WtoE | !ButtonN_EtoW) & (Curr_Direction = NS) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonS_EtoW;
+  esac;
+  next(ButtonE_NtoS) := case
+      (!ButtonE_NtoS | !ButtonE_StoN) & (!ButtonW_NtoS | !ButtonW_StoN) & (Curr_Direction = WE) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonE_NtoS;
+  esac;
+  next(ButtonE_StoN) := case
+      (!ButtonE_NtoS | !ButtonE_StoN) & (!ButtonW_NtoS | !ButtonW_StoN) & (Curr_Direction = WE) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonE_StoN;
+  esac;
+  next(ButtonW_NtoS) := case
+      (!ButtonW_NtoS | !ButtonW_StoN) & (!ButtonE_NtoS | !ButtonE_StoN) & (Curr_Direction = WE) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonW_NtoS;
+  esac;
+  next(ButtonW_StoN) := case
+      (!ButtonW_NtoS | !ButtonW_StoN) & (!ButtonE_NtoS | !ButtonE_StoN) & (Curr_Direction = WE) & (time_left_green > 10): {TRUE, FALSE};
+      (time_left_green = 0): FALSE;
+      TRUE: ButtonW_StoN;
+  esac;
+  next(SensorNS_cars) := case
+      (Curr_Direction = WE) & (time_left_green = 45): 0..20;
+      (Curr_Direction = WE) & (TrafLight_WE = GREEN) & (SensorNS_cars < 10): {SensorNS_cars + 1, SensorNS_cars};
+      (Curr_Direction = WE) & (time_left_red = 0): 0;
+      TRUE: SensorNS_cars;
+  esac;
+  next(SensorWE_cars) := case
+      (Curr_Direction = NS) & (time_left_green = 45): 0..20;
+      (Curr_Direction = NS) & (TrafLight_NS = GREEN) & (SensorWE_cars < 10): {SensorWE_cars + 1, SensorWE_cars};
+      (Curr_Direction = NS) & (time_left_red = 0): 0;
+      TRUE: SensorWE_cars;
+  esac;
+  next(waiting_cars_reduction) := case
+      (Curr_Direction = NS) & (SensorWE_cars > 0): applying;
+      (Curr_Direction = WE) & (SensorNS_cars > 0): applying;
+      (waiting_cars_reduction = applying): no;
+      TRUE: waiting_cars_reduction;
+  esac;
+  next(SensorNS_Emergency) := {FALSE, TRUE};
+  next(SensorWE_Emergency) := {FALSE, TRUE};
